@@ -1,0 +1,223 @@
+{
+	"name": "wittDev",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEachCollection",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "LookupCollections",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('LookupCollections').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "CopyWITT",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.00:30:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "MongoDbAtlasSource",
+									"batchSize": 100
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "MongoDbAtlasWitt",
+									"type": "DatasetReference",
+									"parameters": {
+										"collectionName": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "UsersDev",
+									"type": "DatasetReference",
+									"parameters": {
+										"folderPath": {
+											"value": "@concat('witt_dev/',item().name,'/', formatDateTime(pipeline().TriggerTime,'yyyy/MM/dd'))",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "CheckZeroRows",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "CopyWITT",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(activity('CopyWITT').output.rowsCopied, 0)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Fail2",
+										"type": "Fail",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"message": {
+												"value": "No rows copied for @{item().name}",
+												"type": "Expression"
+											},
+											"errorCode": "500"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "LookupCollections",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "ConfigCollections",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "dfCuratedUsers",
+				"type": "ExecuteDataFlow",
+				"dependsOn": [
+					{
+						"activity": "ForEachCollection",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataflow": {
+						"referenceName": "dfCuratedUsers",
+						"type": "DataFlowReference",
+						"datasetParameters": {
+							"RawUsers": {
+								"folderPath": {
+									"value": "@concat('witt_dev/users/', formatDateTime(pipeline().TriggerTime, 'yyyy/MM/dd'))",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					"compute": {
+						"coreCount": 8,
+						"computeType": "General"
+					},
+					"traceLevel": "Fine"
+				}
+			},
+			{
+				"name": "HandleLookupFailure",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "LookupCollections",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "Fail1",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "HandleLookupFailure",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Config lookup failed",
+					"errorCode": "500"
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2026-11-12T18:16:19Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

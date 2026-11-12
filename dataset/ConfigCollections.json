@@ -1,0 +1,20 @@
+{
+	"name": "ConfigCollections",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "linkedserviceDL",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "collections.json",
+				"fileSystem": "config"
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

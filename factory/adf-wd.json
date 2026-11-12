@@ -1,0 +1,15 @@
+{
+	"name": "adf-wd",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true
+		}
+	},
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "4274b8fa-cfcf-488a-a962-ec3ee95d01ed",
+		"tenantId": "72fc1f50-ab62-417f-87b6-0e6aef6b9b44"
+	}
+}

@@ -1,0 +1,29 @@
+{
+	"name": "UsersDev",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "linkedserviceDL",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"folderPath": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "data.json",
+				"folderPath": {
+					"value": "@dataset().folderPath",
+					"type": "Expression"
+				},
+				"fileSystem": "destination"
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

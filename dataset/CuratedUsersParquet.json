@@ -1,0 +1,21 @@
+{
+	"name": "CuratedUsersParquet",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "linkedserviceDL",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"folderPath": "curatedUsers",
+				"fileSystem": "destination"
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,30 @@
+{
+	"name": "RawJson",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "linkedserviceDL",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"folderPath": {
+				"type": "string",
+				"defaultValue": "witt_dev/users/2026/11/11"
+			}
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": "data.json",
+				"folderPath": {
+					"value": "@dataset().folderPath",
+					"type": "Expression"
+				},
+				"fileSystem": "destination"
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

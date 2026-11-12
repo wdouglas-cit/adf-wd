@@ -1,0 +1,25 @@
+{
+	"name": "selectedFilesTrigger",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "metadata",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Minute",
+				"interval": 15,
+				"startTime": "2026-11-10T20:18:00Z",
+				"endTime": "2026-11-11T21:13:00Z",
+				"timeZone": "UTC"
+			}
+		}
+	}
+}

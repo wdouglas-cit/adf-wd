@@ -1,0 +1,25 @@
+{
+	"name": "MongoDbAtlasWitt",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "wittDev",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"collectionName": {
+				"type": "string",
+				"defaultValue": "users"
+			}
+		},
+		"annotations": [],
+		"type": "MongoDbAtlasCollection",
+		"schema": [],
+		"typeProperties": {
+			"collection": {
+				"value": "@dataset().collectionName",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
