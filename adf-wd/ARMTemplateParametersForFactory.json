@@ -1,0 +1,33 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adf-wd"
+		},
+		"linkedserviceDL_accountKey": {
+			"value": ""
+		},
+		"wittDev_connectionString": {
+			"value": ""
+		},
+		"linked_git_properties_typeProperties_url": {
+			"value": "https://raw.githubusercontent.com"
+		},
+		"linkedserviceDL_properties_typeProperties_url": {
+			"value": "https://storageadfwilliam1.dfs.core.windows.net/"
+		},
+		"wittDev_properties_typeProperties_database": {
+			"value": "witt-dev"
+		},
+		"DailyWindowWittDev_properties_pipeline_parameters_windowStart": {
+			"value": "@trigger().outputs.windowStartTime"
+		},
+		"DailyWindowWittDev_properties_pipeline_parameters_windowEnd": {
+			"value": "@trigger().outputs.windowEndTime"
+		},
+		"manTrigger_properties_typeProperties_scope": {
+			"value": "/subscriptions/d67eda7f-4e55-4a88-ac1b-212cf89400fe/resourceGroups/ADF-training/providers/Microsoft.Storage/storageAccounts/storageadfwilliam1"
+		}
+	}
+}

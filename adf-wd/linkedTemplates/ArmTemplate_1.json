@@ -1,0 +1,1135 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-wd"
+		},
+		"DailyWindowWittDev_properties_pipeline_parameters_windowStart": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowStartTime"
+		},
+		"DailyWindowWittDev_properties_pipeline_parameters_windowEnd": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowEndTime"
+		},
+		"manTrigger_properties_typeProperties_scope": {
+			"type": "string",
+			"defaultValue": "/subscriptions/d67eda7f-4e55-4a88-ac1b-212cf89400fe/resourceGroups/ADF-training/providers/Microsoft.Storage/storageAccounts/storageadfwilliam1"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/pipelinemanager')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Copy CSV",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".txt"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "csv_source",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "sink_csv",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "Deletefile",
+						"type": "Delete",
+						"dependsOn": [
+							{
+								"activity": "Copy CSV",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "csv_source",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"enableLogging": false,
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-11T16:53:20Z"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/wittDevIncremental')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ForEachCollection",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "LookupCollections",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('LookupCollections').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "CopyWITT",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "MongoDbAtlasSource",
+											"batchSize": 100,
+											"filter": {
+												"value": "{updatedAt: {$gte: ISODate(\"@{pipeline().parameters.windowStart}\"), $lt: ISODate(\"@{pipeline().parameters.windowEnd}\")}}",
+												"type": "Expression"
+											}
+										},
+										"sink": {
+											"type": "JsonSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "JsonWriteSettings"
+											}
+										},
+										"enableStaging": false
+									},
+									"inputs": [
+										{
+											"referenceName": "MongoDbAtlasWitt",
+											"type": "DatasetReference",
+											"parameters": {
+												"collectionName": {
+													"value": "@item().name",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "UsersDev",
+											"type": "DatasetReference",
+											"parameters": {
+												"folderPath": {
+													"value": "@concat('witt_dev/', item().name, '/incremental/', formatDateTime(pipeline().parameters.windowStart, 'yyyy/MM/dd'))",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								}
+							]
+						}
+					},
+					{
+						"name": "LookupCollections",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "JsonSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "JsonReadSettings"
+								}
+							},
+							"dataset": {
+								"referenceName": "ConfigCollections",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"windowStart": {
+						"type": "string",
+						"defaultValue": "2026-11-10T00:00:00Z"
+					},
+					"windowEnd": {
+						"type": "string",
+						"defaultValue": "2026-11-11T00:00:00Z"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-11T19:18:37Z"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TransformCSV')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "dataflow_source",
+								"type": "DatasetReference"
+							},
+							"name": "sourceCSV"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "aggregated_output",
+								"type": "DatasetReference"
+							},
+							"name": "sink"
+						}
+					],
+					"transformations": [
+						{
+							"name": "selectCols"
+						},
+						{
+							"name": "filterRows"
+						},
+						{
+							"name": "split1"
+						},
+						{
+							"name": "derivedColumn1"
+						},
+						{
+							"name": "aggregate"
+						},
+						{
+							"name": "alterRow1"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          transaction_id as short,",
+						"          transactional_date as timestamp,",
+						"          product_id as string,",
+						"          customer_id as short,",
+						"          payment as string,",
+						"          credit_card as long,",
+						"          loyalty_card as boolean,",
+						"          cost as double,",
+						"          quantity as short,",
+						"          price as double",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false) ~> sourceCSV",
+						"sourceCSV select(mapColumn(",
+						"          transaction_id,",
+						"          transactional_date,",
+						"          product_id,",
+						"          customer_id,",
+						"          payment,",
+						"          price",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> selectCols",
+						"selectCols filter(customer_id != 12) ~> filterRows",
+						"filterRows split(payment == 'visa',",
+						"     payment == 'mastercard',",
+						"     disjoint: false) ~> split1@(visa, mastercard, other)",
+						"split1@other derive(payment = coalesce(payment, \"N/A\")) ~> derivedColumn1",
+						"split1@visa aggregate(groupBy(customer_id),",
+						"     product_id = max(product_id)) ~> aggregate",
+						"aggregate alterRow(insertIf(1==1)) ~> alterRow1",
+						"alterRow1 sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> sink"
+					]
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/dfCuratedUsers')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "RawJson",
+								"type": "DatasetReference"
+							},
+							"name": "RawUsers"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "CuratedUsersParquet",
+								"type": "DatasetReference"
+							},
+							"name": "CuratedUsers"
+						}
+					],
+					"transformations": [
+						{
+							"name": "pickColumns"
+						},
+						{
+							"name": "ColumnTransform"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          {__v} as ({$numberInt} as boolean),",
+						"          {_id} as ({$oid} as string),",
+						"          accountType as string,",
+						"          activeRole as string,",
+						"          anonymousDonorEmail as string,",
+						"          available as string,",
+						"          createdAt as ({$date} as ({$numberLong} as long)),",
+						"          createdBy as ({$oid} as string),",
+						"          description as string,",
+						"          diseases as ({_id} as boolean, disease as ({$oid} as string), name as string, physician as (email as string, firstName as string, hospital as ({$oid} as string), lastName as string), stage as string)[],",
+						"          dob as ({$date} as ({$numberLong} as long)),",
+						"          donorDisplayInfo as string,",
+						"          email as string,",
+						"          emailSubscriptions as (name as string, unsubscribed as boolean, unsubscribedAt as ({$date} as ({$numberLong} as long)))[],",
+						"          ethnicity as string,",
+						"          extraFields as (deviceUsed as string, diseaseStage as string, householdIncome as string, housingStatus as string, insurance as string, internetAccessBarrier as string, internetAtHome as string, jobTitle as string, maritalStatus as string, modeOfTransportation as string, occupation as string, peopleInYourHousehold as string, preferredContactMethod as string, primaryInternetAtHome as string, primaryLanguage as string, smoker as string, veteran as string),",
+						"          facebookId as long,",
+						"          firstName as string,",
+						"          gender as string,",
+						"          googleId as double,",
+						"          hideTestUser as string,",
+						"          invitationStatus as (status as string, timestamp as string)[],",
+						"          isNewUser as string,",
+						"          isPostHighnoteRelease as boolean,",
+						"          isVerified as boolean,",
+						"          kindOfHelp as string[],",
+						"          language as string,",
+						"          lastLoginDate as ({$date} as ({$numberLong} as long)),",
+						"          lastName as string,",
+						"          lastVerifiedDate as ({$date} as ({$numberLong} as long)),",
+						"          location as (address as string, address1 as string, address2 as string, city as string, country as string, extendedAddress as string, state as string, stateCode as string, zipcode as string),",
+						"          mentoring as string,",
+						"          notificationPreferences as (sms as (enabled as boolean, verifiedAt as ({$date} as ({$numberLong} as string)))),",
+						"          parent as (dob as ({$date} as ({$numberLong} as long)), ethnicity as string, firstName as string, gender as string, lastName as string, race as string, sex as string),",
+						"          password as string,",
+						"          payments as (highnote as (accountHolderId as string, application as (applicationId as string, status as string), applications as (applicationId as string, cardProductId as string, createdAt as ({$date} as ({$numberLong} as long)), status as string)[], createdAt as ({$date} as ({$numberLong} as long)), financialAccounts as (applicationId as string, financialAccountId as string, financialAccountType as string, paymentCards as (activatedAt as ({$date} as ({$numberLong} as long)), isPhysicalCardIssued as boolean, issuedAt as ({$date} as ({$numberLong} as long)), orderStatus as string, paymentCardId as string, physicalPaymentCardOrderId as string, status as string, updatedAt as ({$date} as ({$numberLong} as long)))[], status as string)[]), stripe as (accountId as string, accountStatus as string, createdAt as ({$date} as ({$numberLong} as long)), customerId as string)),",
+						"          phone as string,",
+						"          phoneType as string,",
+						"          phoneVerified as boolean,",
+						"          profileImage as string,",
+						"          profileImageLocation as string,",
+						"          race as string,",
+						"          referralSource as string,",
+						"          referralSourceId as ({$oid} as string),",
+						"          refreshToken as string,",
+						"          registryCategories as string[],",
+						"          roles as string[],",
+						"          smsComplianceLog as (action as string, ipAddress as string, keyword as string, source as string, timestamp as ({$date} as ({$numberLong} as long)))[],",
+						"          smsConsentGiven as string,",
+						"          smsOptOutSource as string,",
+						"          smsVerificationModalDismissed as string,",
+						"          state as string,",
+						"          termsAndConditions as (date as ({$date} as ({$numberLong} as long)), documentUpdatedAt as date, name as string, status as string, version as string)[],",
+						"          tokens as (createdAt as ({$date} as ({$numberLong} as long)), token as string, validUntil as ({$date} as ({$numberLong} as long)))[],",
+						"          updatedAt as ({$date} as ({$numberLong} as long)),",
+						"          verificationRequests as (mailSent as boolean, phoneNumber as long, physicianAddress as string, physicianName as string, physicianPhoneNumber as long, requestedDate as string, status as string, token as string, verificationDate as string)[]",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     documentForm: 'documentPerLine') ~> RawUsers",
+						"ColumnTransform select(mapColumn(",
+						"          {_id},",
+						"          email,",
+						"          accountType,",
+						"          createdAt,",
+						"          diseases,",
+						"          dob,",
+						"          ethnicity,",
+						"          gender,",
+						"          hideTestUser,",
+						"          language,",
+						"          lastLoginDate,",
+						"          accountHolderId = payments.highnote.accountHolderId,",
+						"          phone,",
+						"          race,",
+						"          referralSource,",
+						"          referralSourceId,",
+						"          roles,",
+						"          state,",
+						"          updatedAt,",
+						"          accountId = payments.highnote.financialAccounts[1].financialAccountId,",
+						"          {_fullName},",
+						"          {_createdAt},",
+						"          {_addressLine},",
+						"          {_id}",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> pickColumns",
+						"RawUsers derive({_id} = toString({_id}.{$oid}),",
+						"          {_addressLine} = concat(location.extendedAddress,', ', location.city,', ', location.state,', ', location.zipcode,', ', location.country),",
+						"          {_createdAt} = toTimestamp(createdAt.{$date}.{$numberLong}),",
+						"          {_fullName} = concat(firstName,' ', lastName)) ~> ColumnTransform",
+						"pickColumns sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'parquet',",
+						"     truncate: true,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     mapColumn(",
+						"          {_id},",
+						"          email,",
+						"          accountType,",
+						"          createdAt,",
+						"          diseases,",
+						"          dob,",
+						"          ethnicity,",
+						"          gender,",
+						"          hideTestUser,",
+						"          language,",
+						"          lastLoginDate,",
+						"          accountHolderId,",
+						"          phone,",
+						"          race,",
+						"          referralSource,",
+						"          referralSourceId,",
+						"          roles,",
+						"          state,",
+						"          updatedAt,",
+						"          accountId,",
+						"          {_fullName},",
+						"          {_createdAt},",
+						"          {_addressLine}",
+						"     )) ~> CuratedUsers"
+					]
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/metadata')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get Metadata1",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "meta_data",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"fieldList": [
+								"childItems"
+							],
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "DelimitedTextReadSettings"
+							}
+						}
+					},
+					{
+						"name": "ForEach1",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Get Metadata1",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get Metadata1').output.childItems",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "Iffilematches",
+									"type": "IfCondition",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@startswith(item().name, 'Fact')",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "Copy Fact Data",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobFSReadSettings",
+															"recursive": true,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobFSWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false,
+													"translator": {
+														"type": "TabularTranslator",
+														"typeConversion": true,
+														"typeConversionSettings": {
+															"allowDataTruncation": true,
+															"treatBooleanAsNumber": false
+														}
+													}
+												},
+												"inputs": [
+													{
+														"referenceName": "param_source_csv",
+														"type": "DatasetReference",
+														"parameters": {
+															"p_file_name": {
+																"value": "@item().name",
+																"type": "Expression"
+															}
+														}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "reporting_sink",
+														"type": "DatasetReference",
+														"parameters": {
+															"p_file_name": {
+																"value": "@item().name",
+																"type": "Expression"
+															}
+														}
+													}
+												]
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "DataTransformation",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "ForEach1",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "TransformCSV",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"sourceCSV": {},
+									"sink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-10T20:13:10Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/TransformCSV')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/wittDev')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ForEachCollection",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "LookupCollections",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('LookupCollections').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"batchCount": 5,
+							"activities": [
+								{
+									"name": "CopyWITT",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.00:30:00",
+										"retry": 5,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "MongoDbAtlasSource",
+											"batchSize": 100
+										},
+										"sink": {
+											"type": "JsonSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "JsonWriteSettings"
+											}
+										},
+										"enableStaging": false
+									},
+									"inputs": [
+										{
+											"referenceName": "MongoDbAtlasWitt",
+											"type": "DatasetReference",
+											"parameters": {
+												"collectionName": {
+													"value": "@item().name",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "UsersDev",
+											"type": "DatasetReference",
+											"parameters": {
+												"folderPath": {
+													"value": "@concat('witt_dev/',item().name,'/', formatDateTime(pipeline().TriggerTime,'yyyy/MM/dd'))",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "CheckZeroRows",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "CopyWITT",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@equals(activity('CopyWITT').output.rowsCopied, 0)",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "FailIfNoRowsCopied",
+												"type": "Fail",
+												"dependsOn": [],
+												"userProperties": [],
+												"typeProperties": {
+													"message": {
+														"value": "No rows copied for @{item().name}",
+														"type": "Expression"
+													},
+													"errorCode": "500"
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "LookupCollections",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "JsonSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "JsonReadSettings"
+								}
+							},
+							"dataset": {
+								"referenceName": "ConfigCollections",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "dfCuratedUsers",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "ForEachCollection",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "dfCuratedUsers",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"RawUsers": {
+										"folderPath": {
+											"value": "@concat('witt_dev/users/', formatDateTime(pipeline().TriggerTime, 'yyyy/MM/dd'))",
+											"type": "Expression"
+										}
+									},
+									"CuratedUsers": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "HandleLookupFailure",
+						"type": "Wait",
+						"dependsOn": [
+							{
+								"activity": "LookupCollections",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "FailOnLookupCollection",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "HandleLookupFailure",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Config lookup failed",
+							"errorCode": "500"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-12T18:16:19Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/dfCuratedUsers')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/wittDevCurated')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "dfCuratedUsers",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "dfCuratedUsers",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"RawUsers": {},
+									"CuratedUsers": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-12T15:32:53Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/dfCuratedUsers')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DailyWindowWittDev')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipeline": {
+					"pipelineReference": {
+						"referenceName": "wittDevIncremental",
+						"type": "PipelineReference"
+					},
+					"parameters": {
+						"windowStart": "[parameters('DailyWindowWittDev_properties_pipeline_parameters_windowStart')]",
+						"windowEnd": "[parameters('DailyWindowWittDev_properties_pipeline_parameters_windowEnd')]"
+					}
+				},
+				"type": "TumblingWindowTrigger",
+				"typeProperties": {
+					"frequency": "Hour",
+					"interval": 24,
+					"startTime": "2026-11-07T00:00:00Z",
+					"delay": "00:00:00",
+					"maxConcurrency": 50,
+					"retryPolicy": {
+						"intervalInSeconds": 30
+					},
+					"dependsOn": []
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/wittDevIncremental')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/manTrigger')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "pipelinemanager",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "BlobEventsTrigger",
+				"typeProperties": {
+					"blobPathBeginsWith": "/source/blobs/csvfiles/Fact_Sales_1.csv",
+					"ignoreEmptyBlobs": true,
+					"scope": "[parameters('manTrigger_properties_typeProperties_scope')]",
+					"events": [
+						"Microsoft.Storage.BlobCreated"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pipelinemanager')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DailyWittDev')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "wittDev",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Day",
+						"interval": 1,
+						"startTime": "2026-11-11T18:00:00Z",
+						"timeZone": "UTC",
+						"schedule": {
+							"minutes": [
+								0
+							],
+							"hours": [
+								2
+							]
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/wittDev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/selectedFilesTrigger')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "metadata",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Minute",
+						"interval": 15,
+						"startTime": "2026-11-10T20:18:00Z",
+						"endTime": "2026-11-11T21:13:00Z",
+						"timeZone": "UTC"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/metadata')]"
+			]
+		}
+	]
+}
