@@ -28,7 +28,7 @@
 							"dependsOn": [],
 							"policy": {
 								"timeout": "0.00:30:00",
-								"retry": 3,
+								"retry": 5,
 								"retryIntervalInSeconds": 30,
 								"secureOutput": false,
 								"secureInput": false
@@ -199,7 +199,7 @@
 				}
 			},
 			{
-				"name": "Fail1",
+				"name": "FailOnLookupCollection",
 				"type": "Fail",
 				"dependsOn": [
 					{
