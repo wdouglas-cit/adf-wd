@@ -1,6 +1,12 @@
 {
 	"name": "adf-wd",
 	"properties": {
+		"globalParameters": {
+			"apiBaseUrl": {
+				"type": "string",
+				"value": "https://fsfgseg455gv.requestcatcher.com/dev"
+			}
+		},
 		"trustModeClaimForMi": {
 			"value": "Disabled",
 			"editable": true
