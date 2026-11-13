@@ -237,7 +237,10 @@
 				"userProperties": [],
 				"typeProperties": {
 					"method": "POST",
-					"url": "https://fsfgseg455gv.requestcatcher.com/",
+					"url": {
+						"value": "@{pipeline().globalParameters.apiBaseUrl}/path/health",
+						"type": "Expression"
+					},
 					"body": {
 						"value": "@activity('LookupCollections').output.value",
 						"type": "Expression"
