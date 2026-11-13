@@ -1,0 +1,72 @@
+name: ADF deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DEV_FACTORY_ID: /subscriptions/d67eda7f-4e55-4a88-ac1b-212cf89400fe/resourceGroups/ADF-training/providers/Microsoft.DataFactory/factories/adf-wd
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ADF utilities
+        run: npm install
+        working-directory: build
+
+      - name: Validate factory
+        run: npm run build validate ${{ github.workspace }} ${{ env.DEV_FACTORY_ID }}
+        working-directory: build
+
+      - name: Export ARM template
+        run: npm run build export ${{ github.workspace }} ${{ env.DEV_FACTORY_ID }} "ArmTemplate"
+        working-directory: build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arm-template
+          path: build/ArmTemplate
+
+  deploy-qa:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: qa
+    env:
+      RESOURCE_GROUP: ADF-training-QA
+      FACTORY_NAME: adf-wd-QA
+      STORAGE_URL: https://storageadfwilliamqa.dfs.core.windows.net/
+      STORAGE_RESOURCE_ID: /subscriptions/d67eda7f-4e55-4a88-ac1b-212cf89400fe/resourceGroups/ADF-training-QA/providers/Microsoft.Storage/storageAccounts/storageadfwilliamqa
+      MONGO_DATABASE: okpc-dev
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: arm-template
+          path: arm
+
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to QA factory
+        env:
+          MONGO_CONNECTION_STRING: ${{ secrets.MONGO_CONNECTION_STRING }}
+          STORAGE_ACCOUNT_KEY: ${{ secrets.STORAGE_ACCOUNT_KEY }}
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file arm/ARMTemplateForFactory.json \
+            --parameters @arm/ARMTemplateParametersForFactory.json \
+            --parameters factoryName="$FACTORY_NAME" \
+                         linkedserviceDL_properties_typeProperties_url="$STORAGE_URL" \
+                         linkedserviceDL_accountKey="$STORAGE_ACCOUNT_KEY" \
+                         wittDev_properties_typeProperties_database="$MONGO_DATABASE" \
+                         wittDev_connectionString="$MONGO_CONNECTION_STRING" \
+                         manTrigger_properties_typeProperties_scope="$STORAGE_RESOURCE_ID"
