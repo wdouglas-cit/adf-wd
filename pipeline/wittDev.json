@@ -1,6 +1,7 @@
 {
 	"name": "wittDev",
 	"properties": {
+		"description": "Daily full copy of the collections listed in config/collections.json",
 		"activities": [
 			{
 				"name": "ForEachCollection",
@@ -213,6 +214,34 @@
 				"typeProperties": {
 					"message": "Config lookup failed",
 					"errorCode": "500"
+				}
+			},
+			{
+				"name": "API_POST",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "ForEachCollection",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://fsfgseg455gv.requestcatcher.com/",
+					"body": {
+						"value": "@activity('LookupCollections').output.value",
+						"type": "Expression"
+					}
 				}
 			}
 		],
